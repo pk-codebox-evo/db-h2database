@@ -37,20 +37,18 @@ import org.h2.api.ErrorCode;
 import org.h2.command.CommandInterface;
 import org.h2.engine.ConnectionInfo;
 import org.h2.engine.Constants;
-import org.h2.engine.Database;
 import org.h2.engine.Mode;
-import org.h2.engine.Session;
 import org.h2.engine.SessionInterface;
 import org.h2.engine.SessionRemote;
 import org.h2.engine.SysProperties;
 import org.h2.message.DbException;
 import org.h2.message.TraceObject;
 import org.h2.result.ResultInterface;
-import org.h2.schema.Schema;
 import org.h2.util.CloseWatcher;
 import org.h2.util.JdbcUtils;
 import org.h2.util.Utils;
 import org.h2.value.CompareMode;
+import org.h2.value.DataType;
 import org.h2.value.Value;
 import org.h2.value.ValueInt;
 import org.h2.value.ValueNull;
@@ -66,7 +64,8 @@ import org.h2.value.ValueString;
  * connection should only be used in one thread at any time.
  * </p>
  */
-public class JdbcConnection extends TraceObject implements Connection, JdbcConnectionBackwardsCompat {
+public class JdbcConnection extends TraceObject implements Connection,
+        JdbcConnectionBackwardsCompat {
 
     private static final String NUM_SERVERS = "numServers";
     private static final String PREFIX_SERVER = "server";
@@ -882,7 +881,9 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
     @Override
     public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
         try {
-            debugCode("setTypeMap(" + quoteMap(map) + ");");
+            if (isDebugEnabled()) {
+                debugCode("setTypeMap(" + quoteMap(map) + ");");
+            }
             checkMap(map);
         } catch (Exception e) {
             throw logAndConvert(e);
@@ -1044,7 +1045,9 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
     public void rollback(Savepoint savepoint) throws SQLException {
         try {
             JdbcSavepoint sp = convertSavepoint(savepoint);
-            debugCode("rollback(" + sp.getTraceObjectName() + ");");
+            if (isDebugEnabled()) {
+                debugCode("rollback(" + sp.getTraceObjectName() + ");");
+            }
             checkClosedForWrite();
             try {
                 sp.rollback();
@@ -1632,12 +1635,22 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
     }
 
     /**
-     * [Not supported] Create a new empty Array object.
+     * Create a new Array object.
+     *
+     * @return the array
      */
     @Override
     public Array createArrayOf(String typeName, Object[] elements)
             throws SQLException {
-        throw unsupported("createArray");
+        try {
+            int id = getNextId(TraceObject.ARRAY);
+            debugCodeAssign("Array", TraceObject.ARRAY, id, "createArrayOf()");
+            checkClosed();
+            Value value = DataType.convertToValue(session, elements, Value.ARRAY);
+            return new JdbcArray(this, value, id);
+        } catch (Exception e) {
+            throw logAndConvert(e);
+        }
     }
 
     /**
@@ -1797,7 +1810,6 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
                 p.setProperty(PREFIX_SERVER + String.valueOf(i), serverList.get(i));
             }
 
-
             return p;
         } catch (Exception e) {
             throw logAndConvert(e);
@@ -1818,6 +1830,9 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
                 debugCodeCall("getClientInfo", name);
             }
             checkClosed();
+            if (name == null) {
+                throw DbException.getInvalidValueException("name", null);
+            }
             return getClientInfo().getProperty(name);
         } catch (Exception e) {
             throw logAndConvert(e);
@@ -1833,10 +1848,14 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
     @Override
     @SuppressWarnings("unchecked")
     public <T> T unwrap(Class<T> iface) throws SQLException {
-        if (isWrapperFor(iface)) {
-            return (T) this;
+        try {
+            if (isWrapperFor(iface)) {
+                return (T) this;
+            }
+            throw DbException.getInvalidValueException("iface", iface);
+        } catch (Exception e) {
+            throw logAndConvert(e);
         }
-        throw DbException.getInvalidValueException("iface", iface);
     }
 
     /**
@@ -1891,8 +1910,8 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
     }
 
     /**
-     * Sets the given schema name to access. Current implementation is case sensitive,
-     * i.e. requires schema name to be passed in correct case.
+     * Sets the given schema name to access. Current implementation is case
+     * sensitive, i.e. requires schema name to be passed in correct case.
      *
      * @param schema the schema name
      */
@@ -1903,12 +1922,7 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
                 debugCodeCall("setSchema", schema);
             }
             checkClosed();
-            if (session.isRemote()) {
-                throw DbException.getUnsupportedException("setSchema && remote session");
-            }
-            Database database = (Database) session.getDataHandler();
-            Schema s = database.getSchema(schema);
-            ((Session) session).setCurrentSchema(s);
+            session.setCurrentSchemaName(schema);
         } catch (Exception e) {
             throw logAndConvert(e);
         }
@@ -1926,10 +1940,7 @@ public class JdbcConnection extends TraceObject implements Connection, JdbcConne
                 debugCodeCall("getSchema");
             }
             checkClosed();
-            if (session.isRemote()) {
-                throw DbException.getUnsupportedException("getSchema && remote session");
-            }
-            return ((Session) session).getCurrentSchemaName();
+            return session.getCurrentSchemaName();
         } catch (Exception e) {
             throw logAndConvert(e);
         }

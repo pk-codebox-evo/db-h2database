@@ -167,6 +167,9 @@ drop table test;
 call regexp_replace('x', 'x', '\');
 > exception
 
+call select 1 from dual where regexp_like('x', 'x', '\');
+> exception
+
 select * from dual where x = x + 1 or x in(2, 0);
 > X
 > -
@@ -2112,6 +2115,23 @@ CALL REGEXP_REPLACE('abckaboooom', 'o+', 'o');
 > abckabom
 > rows: 1
 
+select x from dual where REGEXP_LIKE('A', '[a-z]', 'i');
+> X
+> -
+> 1
+> rows: 1
+
+select x from dual where REGEXP_LIKE('A', '[a-z]', 'c');
+> X
+> -
+> rows: 0
+
+select regexp_replace('Sylvain', 'S..', 'TOTO', 'mni') as X;
+> X
+> --------
+> TOTOvain
+> rows: 1
+
 SELECT 'Hello' ~ 'He.*' T1, 'HELLO' ~ 'He.*' F2, CAST('HELLO' AS VARCHAR_IGNORECASE) ~ 'He.*' T3;
 > T1   F2    T3
 > ---- ----- ----
@@ -3034,6 +3054,13 @@ select min(8=bitand(12, PARSE_INT2(SUBSTRING(random_uuid(), 20,1), 16))) from sy
 > ---------------------------------------------------------------------------
 > TRUE
 > rows: 1
+
+select BITGET(x, 0) AS IS_SET from system_range(1, 2);
+> IS_SET
+> ------
+> FALSE
+> TRUE
+> rows: 2
 
 drop alias PARSE_INT2;
 > ok
@@ -7351,6 +7378,17 @@ SELECT * FROM TEST WHERE NAME LIKE 'Hello%';
 > 1  Hello
 > rows: 1
 
+SELECT * FROM TEST WHERE NAME ILIKE 'hello%';
+> ID NAME
+> -- -----
+> 1  Hello
+> rows: 1
+
+SELECT * FROM TEST WHERE NAME ILIKE 'xxx%';
+> ID NAME
+> -- ----
+> rows: 0
+
 SELECT * FROM TEST WHERE NAME LIKE 'Wo%';
 > ID NAME
 > -- -----
@@ -8134,9 +8172,9 @@ select * from s;
 > rows: 1
 
 select some(y>10), every(y>10), min(y), max(y) from t;
-> BOOL_OR(Y > 10) BOOL_AND(Y > 10) MIN(Y) MAX(Y)
-> --------------- ---------------- ------ ------
-> null            null             null   null
+> BOOL_OR(Y > 10.0) BOOL_AND(Y > 10.0) MIN(Y) MAX(Y)
+> ----------------- ------------------ ------ ------
+> null              null               null   null
 > rows: 1
 
 insert into t values(1000000004, 4);
@@ -8192,9 +8230,9 @@ stddev_pop(distinct y) s_py, stddev_samp(distinct y) s_sy, var_pop(distinct y) v
 > rows: 1
 
 select some(y>10), every(y>10), min(y), max(y) from t;
-> BOOL_OR(Y > 10) BOOL_AND(Y > 10) MIN(Y) MAX(Y)
-> --------------- ---------------- ------ ------
-> TRUE            FALSE            4.0    16.0
+> BOOL_OR(Y > 10.0) BOOL_AND(Y > 10.0) MIN(Y) MAX(Y)
+> ----------------- ------------------ ------ ------
+> TRUE              FALSE              4.0    16.0
 > rows: 1
 
 drop view s;

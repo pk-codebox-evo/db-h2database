@@ -33,7 +33,6 @@ import org.h2.value.ValueString;
 import org.h2.value.ValueTime;
 import org.h2.value.ValueTimestamp;
 import org.h2.value.ValueTimestampTimeZone;
-import org.h2.value.ValueTimestampUtc;
 import org.h2.value.ValueUuid;
 
 /**
@@ -296,8 +295,6 @@ public class Column {
                         value = ValueInt.get(0).convertTo(type);
                     } else if (dt.type == Value.TIMESTAMP) {
                         value = ValueTimestamp.fromMillis(session.getTransactionStart());
-                    } else if (dt.type == Value.TIMESTAMP_UTC) {
-                        value = ValueTimestampUtc.fromMillis(session.getTransactionStart());
                     } else if (dt.type == Value.TIMESTAMP_TZ) {
                         long ms = session.getTransactionStart();
                         value = ValueTimestampTimeZone.fromDateValueAndNanos(
@@ -386,7 +383,7 @@ public class Column {
         while (true) {
             ValueUuid uuid = ValueUuid.getNewRandom();
             String s = uuid.getString();
-            s = s.replace('-', '_').toUpperCase();
+            s = StringUtils.toUpperEnglish(s.replace('-', '_'));
             sequenceName = "SYSTEM_SEQUENCE_" + s;
             if (schema.findSequence(sequenceName) == null) {
                 break;
@@ -408,7 +405,8 @@ public class Column {
      */
     public void prepareExpression(Session session) {
         if (defaultExpression != null) {
-            computeTableFilter = new TableFilter(session, table, null, false, null, 0);
+            computeTableFilter = new TableFilter(session, table, null, false, null, 0,
+                    null);
             defaultExpression.mapColumns(computeTableFilter, 0);
             defaultExpression = defaultExpression.optimize(session);
         }
